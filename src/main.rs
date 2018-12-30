@@ -38,7 +38,21 @@ fn main() {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ShorePoint{
     name: String,
-    ip: Option<String>,
+    ip: Option<std::net::SocketAddr>,
+}
+
+impl PartialEq for ShorePoint {
+    fn eq(&self, other: &ShorePoint) -> bool {
+        self.ip == other.ip 
+        && self.name == self.name
+    }
+}
+
+fn send_share_request(socket :&UdpSocket)
+{
+    let whos_there = "abcd";
+    socket.send_to(whos_there.as_bytes(), "10.0.179.255:6666").expect("could not send broadcast");
+
 }
 
 fn run_crows_nest() -> Vec<ShorePoint>
@@ -48,14 +62,17 @@ fn run_crows_nest() -> Vec<ShorePoint>
     let time_out_duration = Duration::new(10,0);
     let option : Option<Duration> = Option::from(time_out_duration);
     socket.set_read_timeout(option).expect("set_read_timeout call failed");
-    // socket.set_nonblocking(true).expect("could not set non-blocking");
-    let whos_there = "abcd";
-    socket.send_to(whos_there.as_bytes(), "10.0.179.255:6666").expect("could not send broadcast");
+    socket.set_nonblocking(true).expect("could not set non-blocking");
+    
+    // thread::spawn(move || {
+    //     send_share_request(&socket)
+    // });
     
     let start = Instant::now();
     let mut buf = [0u8; 1024];
     let mut shore_points: Vec<ShorePoint> = Vec::new();
     while start.elapsed().as_secs() < 5 {
+        send_share_request(&socket);
         let (amt, src) = match socket.recv_from(&mut buf)
         {
             Ok(r) => r,
@@ -66,20 +83,24 @@ fn run_crows_nest() -> Vec<ShorePoint>
             
         };
         let filled_buffer = &buf[..amt];
-        let payload = str::from_utf8(&filled_buffer).expect("Error converting payload to string");
+        let payload = str::from_utf8(filled_buffer).expect("Error converting payload to string");
 
         // Convert the JSON string back to a Point.
-        let deserialized: ShorePoint = match serde_json::from_str(&payload)
+        let mut deserialized: ShorePoint = match serde_json::from_str(&payload)
         {
             Ok(r) => r,
               Err(e) => {
                 println!("{}",e);
                 continue;
             }, 
-        };                                                                 
-        println!("{:?}", deserialized);
-        shore_points.push(deserialized);
-        thread::sleep(Duration::from_millis(50));
+        };            
+        deserialized.ip = Option::from(src);                                               
+       
+        if !shore_points.contains(&deserialized) {
+            println!("{:?}", &deserialized);
+            shore_points.push(deserialized);
+        }
+        thread::sleep(Duration::from_millis(100));
         
     }
 
@@ -109,9 +130,9 @@ fn run_lighthouse(shore_point: &ShorePoint){
         };
         let filled_buffer = &buf[..amt];
         let code_word = str::from_utf8(&filled_buffer).unwrap();
-        println!("{}: {:?}", src, code_word);
+        //println!("{}: {:?}", src, code_word);
         if code_word == "abcd" {
-            println!("{}",shore_point.name);                                                   
+            // println!("{}",shore_point.name);                                                   
             let serialized_shore = serde_json::to_string(shore_point).expect("Error serializing Shore Point");
             socket.send_to(serialized_shore.as_bytes(), src).expect("Error sending Shore Point");
         }
