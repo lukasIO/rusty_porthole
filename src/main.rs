@@ -10,6 +10,8 @@ use std::str;
 use std::thread;
 use std::time::{Duration, Instant};
 
+static MY_IP: &'static str = "10.0.179.138";
+
 struct Config {
     shore_name: String,
 }
@@ -41,14 +43,14 @@ pub struct ShorePoint{
 
 fn run_crows_nest() -> Vec<ShorePoint>
 {
-    let socket = UdpSocket::bind("127.0.0.1:6667").expect("could not bind to address");
+    let socket = UdpSocket::bind(format!("{}:6667",MY_IP)).expect("could not bind to address");
     socket.set_broadcast(true).expect("set_broadcast call failed");
     let time_out_duration = Duration::new(10,0);
     let option : Option<Duration> = Option::from(time_out_duration);
     socket.set_read_timeout(option).expect("set_read_timeout call failed");
     // socket.set_nonblocking(true).expect("could not set non-blocking");
     let whos_there = "abcd";
-    socket.send_to(whos_there.as_bytes(), "255.255.255.255:6666").expect("could not send broadcast");
+    socket.send_to(whos_there.as_bytes(), "10.0.179.255:6666").expect("could not send broadcast");
     
     let start = Instant::now();
     let mut buf = [0u8; 1024];
@@ -92,7 +94,7 @@ fn add_to_shore_sightings(shorepoint :ShorePoint)
 
 fn run_lighthouse(shore_point: &ShorePoint){
     // let socket = create_and_bind_socket();
-    let socket = UdpSocket::bind("127.0.0.1:6666").expect("could not bind to address");
+    let socket = UdpSocket::bind(format!("{}:6666",MY_IP)).expect("could not bind to address");
     let mut buf = [0; 1024];
     loop {
         
